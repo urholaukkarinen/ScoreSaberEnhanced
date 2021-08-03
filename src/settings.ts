@@ -122,6 +122,22 @@ function show_settings_lazy() {
 			create("label", { for: "show_oc_link", class: "checkbox" }, "Show OneClick link"),
 		),
 		create("div", { class: "field" },
+			create("input", {
+				id: "use_beatmaps",
+				type: "checkbox",
+				class: "is-checkradio",
+				checked: env.get_use_beatmaps(),
+				onchange() {
+					env.set_use_beatmaps((this as HTMLInputElement).checked);
+					update_button_visibility();
+					if (settings_modal) {
+						settings_modal.reload_page_after_close = true;
+					}
+				}
+			}),
+			create("label", { for: "use_beatmaps", class: "checkbox" }, "Use BeatMaps.io OneClick instead of BeatSaver"),
+		),
+		create("div", { class: "field" },
 			create("label", { class: "label" }, "Other"),
 		),
 		create("div", { class: "field" },

@@ -244,6 +244,12 @@
     function get_show_oc_link() {
         return (localStorage.getItem("show_oc_link") || "true") === "true";
     }
+    function set_use_beatmaps(value) {
+        localStorage.setItem("use_beatmaps", value ? "true" : "false");
+    }
+    function get_use_beatmaps() {
+        return (localStorage.getItem("use_beatmaps") || "true") === "true";
+    }
     function set_use_new_ss_api(value) {
         localStorage.setItem("use_new_api", value ? "true" : "false");
     }
@@ -434,15 +440,15 @@
         }
     }
 
-    const api_cache$1 = new SessionCache("saver");
-    async function get_data_by_hash(song_hash) {
-        const cached_data = api_cache$1.get(song_hash);
+    const api_cache$2 = new SessionCache("saver");
+    async function get_data_by_hash$1(song_hash) {
+        const cached_data = api_cache$2.get(song_hash);
         if (cached_data !== undefined)
             return cached_data;
         try {
             const data_str = await fetch2(`https://beatsaver.com/api/maps/by-hash/${song_hash}`);
             const data = JSON.parse(data_str);
-            api_cache$1.set(song_hash, data);
+            api_cache$2.set(song_hash, data);
             return data;
         }
         catch (e) {
@@ -452,6 +458,7 @@
 
     class Modal {
         constructor(elem) {
+            this.reload_page_after_close = false;
             this.elem = elem;
         }
         show() {
@@ -464,6 +471,9 @@
                 document.documentElement.classList.remove("is-clipped");
             if (this.after_close)
                 this.after_close(answer !== null && answer !== void 0 ? answer : "x");
+            if (this.reload_page_after_close) {
+                window.location.reload();
+            }
         }
         dispose() {
             document.body.removeChild(this.elem);
@@ -579,25 +589,38 @@
         return res ? res[1] : undefined;
     }
     async function oneclick_install(song_key) {
-        const lastCheck = localStorage.getItem("oneclick-prompt");
+        const use_beatmaps = get_use_beatmaps();
+        const oneclick_prompt_key = use_beatmaps
+            ? "oneclick-prompt"
+            : "beatmaps-oneclick-prompt";
+        const lastCheck = localStorage.getItem(oneclick_prompt_key);
         const prompt = !lastCheck ||
             new Date(lastCheck).getTime() + (1000 * 60 * 60 * 24 * 31) < new Date().getTime();
         if (prompt) {
-            localStorage.setItem("oneclick-prompt", new Date().getTime().toString());
+            const installer_url = use_beatmaps
+                ? "https://beatmaps.io/static/BeatMapsioInstaller.exe"
+                : "https://github.com/Assistant/ModAssistant/releases";
+            const prompt_text = use_beatmaps
+                ? "BeatMaps.io One-Click installer is required.\nMake sure you have one installed before proceeding."
+                : "OneClick™ requires any current ModInstaller tool with the OneClick™ feature enabled.\nMake sure you have one installed before proceeding.";
+            localStorage.setItem(oneclick_prompt_key, new Date().getTime().toString());
             const resp = await show_modal({
                 buttons: {
-                    install: { text: "Get ModAssistant Installer", class: "is-info" },
+                    install: { text: "Get installer", class: "is-info" },
                     done: { text: "OK, now leave me alone", class: "is-success" },
                 },
-                text: "OneClick™ requires any current ModInstaller tool with the OneClick™ feature enabled.\nMake sure you have one installed before proceeding.",
+                text: prompt_text,
             });
             if (resp === "install") {
-                window.open("https://github.com/Assistant/ModAssistant/releases");
+                window.open(installer_url);
                 return;
             }
         }
+        const url_protocol = use_beatmaps
+            ? "bmio"
+            : "beatsaver";
         console.log("Downloading: ", song_key);
-        window.location.assign(`beatsaver://${song_key}`);
+        window.location.assign(`${url_protocol}://${song_key}`);
     }
     function song_equals(a, b) {
         if (a === b)
@@ -1157,6 +1180,22 @@
         }
     }
 
+    const api_cache$1 = new SessionCache("beatmaps");
+    async function get_data_by_hash(song_hash) {
+        const cached_data = api_cache$1.get(song_hash);
+        if (cached_data !== undefined)
+            return cached_data;
+        try {
+            const data_str = await fetch2(`https://beatmaps.io/api/maps/hash/${song_hash}`);
+            const data = JSON.parse(data_str);
+            api_cache$1.set(song_hash, data);
+            return data;
+        }
+        catch (e) {
+            return undefined;
+        }
+    }
+
     function generate_beatsaver(song_hash, size) {
         return create("div", {
             class: `button icon is-${size} ${toggled_class(size !== "large", "has-tooltip-left")} beatsaver_bg_btn`,
@@ -1180,10 +1219,12 @@
                 cursor: song_hash === undefined ? "default" : "pointer",
             },
             disabled: song_hash === undefined,
-            data: { tooltip: "Download with OneClick™" },
+            data: { tooltip: get_use_beatmaps()
+                    ? "Download via BeatMaps.io"
+                    : "Download with OneClick™" },
             onclick() {
-                checked_hash_to_song_info(this, song_hash)
-                    .then(song_info => oneclick_install(song_info.key))
+                checked_hash_to_song_key(this, song_hash)
+                    .then(oneclick_install)
                     .then(() => ok_after_download(this))
                     .catch(() => failed_to_download(this));
             },
@@ -1279,13 +1320,34 @@
             },
         }, txtDummyNode, create("i", { class: "fas fa-exclamation" }));
     }
+    async function checked_hash_to_song_key(ref, song_hash) {
+        reset_download_visual(ref);
+        if (song_hash === undefined) {
+            failed_to_download(ref);
+            throw new Error("song_hash is undefined");
+        }
+        let song_key = undefined;
+        if (get_use_beatmaps()) {
+            const song_info = await get_data_by_hash(song_hash);
+            song_key = song_info === null || song_info === void 0 ? void 0 : song_info.id.toString();
+        }
+        else {
+            const song_info = await get_data_by_hash$1(song_hash);
+            song_key = song_info === null || song_info === void 0 ? void 0 : song_info.key;
+        }
+        if (song_key === undefined) {
+            failed_to_download(ref);
+            throw new Error("song_info is undefined");
+        }
+        return song_key;
+    }
     async function checked_hash_to_song_info(ref, song_hash) {
         reset_download_visual(ref);
         if (song_hash === undefined) {
             failed_to_download(ref);
             throw new Error("song_hash is undefined");
         }
-        const song_info = await get_data_by_hash(song_hash);
+        const song_info = await get_data_by_hash$1(song_hash);
         if (song_info === undefined) {
             failed_to_download(ref);
             throw new Error("song_info is undefined");
@@ -1491,7 +1553,7 @@
         if (!song_hash)
             return;
         (async () => {
-            const data = await get_data_by_hash(song_hash);
+            const data = await get_data_by_hash$1(song_hash);
             if (!data)
                 return;
             show_beatsaver_song_data(beatsaver_box, data);
@@ -1547,7 +1609,7 @@
             return;
         }
         (async () => {
-            const data = await get_data_by_hash(song_hash);
+            const data = await get_data_by_hash$1(song_hash);
             if (!data)
                 return;
             const diff_name = check(document.querySelector(`div.tabs li.is-active span`)).innerText;
@@ -1656,7 +1718,7 @@
                 continue;
             }
             (async () => {
-                const data = await get_data_by_hash(song_hash);
+                const data = await get_data_by_hash$1(song_hash);
                 if (!data)
                     return;
                 const song_column = check(row.querySelector(`th.song`));
@@ -2086,7 +2148,19 @@ h5 > * {
                 set_show_oc_link(this.checked);
                 update_button_visibility();
             }
-        }), create("label", { for: "show_oc_link", class: "checkbox" }, "Show OneClick link")), create("div", { class: "field" }, create("label", { class: "label" }, "Other")), create("div", { class: "field" }, create("input", {
+        }), create("label", { for: "show_oc_link", class: "checkbox" }, "Show OneClick link")), create("div", { class: "field" }, create("input", {
+            id: "use_beatmaps",
+            type: "checkbox",
+            class: "is-checkradio",
+            checked: get_use_beatmaps(),
+            onchange() {
+                set_use_beatmaps(this.checked);
+                update_button_visibility();
+                if (settings_modal) {
+                    settings_modal.reload_page_after_close = true;
+                }
+            }
+        }), create("label", { for: "use_beatmaps", class: "checkbox" }, "Use BeatMaps.io OneClick instead of BeatSaver")), create("div", { class: "field" }, create("label", { class: "label" }, "Other")), create("div", { class: "field" }, create("input", {
             id: "use_new_ss_api",
             type: "checkbox",
             class: "is-checkradio",

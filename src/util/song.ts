@@ -4,6 +4,7 @@ import { ISong } from "../declarations/Types";
 import g from "../global";
 import { check } from "./err";
 import { number_invariant } from "./format";
+import * as env from "../env";
 
 export function get_song_compare_value(song_a: ISong, song_b: ISong): [number, number] {
 	if (song_a.pp > 0 || song_b.pp > 0) {
@@ -60,29 +61,46 @@ export async function oneclick_install_byhash(song_hash: string): Promise<boolea
 }
 
 export async function oneclick_install(song_key: string): Promise<void> {
-	const lastCheck = localStorage.getItem("oneclick-prompt");
+	const use_beatmaps = env.get_use_beatmaps();
+	const oneclick_prompt_key = use_beatmaps
+		? "oneclick-prompt"
+		: "beatmaps-oneclick-prompt";
+
+	const lastCheck = localStorage.getItem(oneclick_prompt_key);
 	const prompt = !lastCheck ||
 		new Date(lastCheck).getTime() + (1000 * 60 * 60 * 24 * 31) < new Date().getTime();
 
 	if (prompt) {
-		localStorage.setItem("oneclick-prompt", new Date().getTime().toString());
+		const installer_url = use_beatmaps
+			? "https://beatmaps.io/static/BeatMapsioInstaller.exe"
+			: "https://github.com/Assistant/ModAssistant/releases";
+
+		const prompt_text = use_beatmaps
+			? "BeatMaps.io One-Click installer is required.\nMake sure you have one installed before proceeding."
+			: "OneClick™ requires any current ModInstaller tool with the OneClick™ feature enabled.\nMake sure you have one installed before proceeding.";
+
+		localStorage.setItem(oneclick_prompt_key, new Date().getTime().toString());
 
 		const resp = await modal.show_modal({
 			buttons: {
-				install: { text: "Get ModAssistant Installer", class: "is-info" },
+				install: { text: "Get installer", class: "is-info" },
 				done: { text: "OK, now leave me alone", class: "is-success" },
 			},
-			text: "OneClick™ requires any current ModInstaller tool with the OneClick™ feature enabled.\nMake sure you have one installed before proceeding.",
+			text: prompt_text,
 		});
 
 		if (resp === "install") {
-			window.open("https://github.com/Assistant/ModAssistant/releases");
+			window.open(installer_url);
 			return;
 		}
 	}
 
+	const url_protocol = use_beatmaps
+		? "bmio"
+		: "beatsaver";
+
 	console.log("Downloading: ", song_key);
-	window.location.assign(`beatsaver://${song_key}`);
+	window.location.assign(`${url_protocol}://${song_key}`);
 }
 
 export function song_equals(a?: ISong, b?: ISong): boolean {

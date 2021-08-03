@@ -135,6 +135,13 @@ export function get_show_oc_link(): boolean {
 	return (localStorage.getItem("show_oc_link") || "true") === "true";
 }
 
+export function set_use_beatmaps(value: boolean): void {
+	localStorage.setItem("use_beatmaps", value ? "true" : "false");
+}
+export function get_use_beatmaps(): boolean {
+	return (localStorage.getItem("use_beatmaps") || "true") === "true";
+}
+
 export function set_use_new_ss_api(value: boolean): void {
 	localStorage.setItem("use_new_api", value ? "true" : "false");
 }

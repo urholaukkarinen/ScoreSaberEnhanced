@@ -19,6 +19,8 @@ interface IModalButton {
 
 export class Modal<T extends string> {
 	public after_close?: (answer: Answer<T>) => void;
+	public reload_page_after_close: boolean = false;
+
 	private elem: HTMLElement;
 	constructor(elem: HTMLElement) {
 		this.elem = elem;
@@ -33,6 +35,9 @@ export class Modal<T extends string> {
 			document.documentElement.classList.remove("is-clipped");
 		if (this.after_close)
 			this.after_close(answer ?? "x");
+		if (this.reload_page_after_close) {
+			window.location.reload();
+		}
 	}
 	public dispose(): void {
 		document.body.removeChild(this.elem);

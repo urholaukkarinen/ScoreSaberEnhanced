@@ -1,4 +1,5 @@
 import * as beatsaver from "../api/beatsaver";
+import * as beatmaps from "../api/beatmaps";
 import { BulmaSize } from "../declarations/Types";
 import * as env from "../env";
 import g from "../global";
@@ -32,10 +33,12 @@ export function generate_oneclick(song_hash: string | undefined, size: BulmaSize
 			cursor: song_hash === undefined ? "default" : "pointer",
 		},
 		disabled: song_hash === undefined,
-		data: { tooltip: "Download with OneClick™" },
+		data: { tooltip: env.get_use_beatmaps()
+			? "Download via BeatMaps.io"
+			: "Download with OneClick™" },
 		onclick() {
-			checked_hash_to_song_info(this as any, song_hash)
-				.then(song_info => oneclick_install(song_info.key))
+			checked_hash_to_song_key(this as any, song_hash)
+				.then(oneclick_install)
 				.then(() => ok_after_download(this as any))
 				.catch(() => failed_to_download(this as any));
 		},
@@ -145,6 +148,23 @@ export function generate_copy_bsr(song_hash: string | undefined): HTMLElement {
 		txtDummyNode,
 		create("i", { class: "fas fa-exclamation" }),
 	);
+}
+
+async function checked_hash_to_song_key(ref: HTMLElement, song_hash: string | undefined): Promise<string> {
+	reset_download_visual(ref);
+	if (song_hash === undefined) { failed_to_download(ref); throw new Error("song_hash is undefined"); }
+
+	let song_key = undefined;
+	if (env.get_use_beatmaps()) {
+		const song_info = await beatmaps.get_data_by_hash(song_hash);
+		song_key = song_info?.id.toString();
+	} else {
+		const song_info = await beatsaver.get_data_by_hash(song_hash);
+		song_key = song_info?.key;
+	}
+	
+	if (song_key === undefined) { failed_to_download(ref); throw new Error("song_info is undefined"); }
+	return song_key;
 }
 
 async function checked_hash_to_song_info(ref: HTMLElement, song_hash: string | undefined): Promise<beatsaver.IBeatSaverData> {
